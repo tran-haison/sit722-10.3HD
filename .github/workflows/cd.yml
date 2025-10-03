@@ -145,12 +145,22 @@ jobs:
           cat frontend/main.js
           echo "---------------------------------"
 
-      # Step 6: Deploy Frontend to Production Environment
+      # Step 6: Login to Azure Container Registry
+      - name: Login to Azure Container Registry
+        run: az acr login --name ${{ secrets.ACR_LOGIN_SERVER }}
+
+      # Step 7: Build and Push Frontend Image
+      - name: Build and Push Frontend Image
+        run: |
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest ./frontend/
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest
+
+      # Step 8: Deploy Frontend to Production Environment
       - name: Deploy Frontend to Production Environment
         run: |
           kubectl apply -f k8s/frontend.yaml -n production
 
-      # Step 7: Logout from Azure for security (runs even if deployment fails)
+      # Step 9: Logout from Azure for security (runs even if deployment fails)
       - name: Logout from Azure
         run: az logout
         if: always()

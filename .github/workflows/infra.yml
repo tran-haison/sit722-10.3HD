@@ -72,8 +72,26 @@ jobs:
         id: plan
         run: |
           tofu plan -detailed-exitcode -out=tfplan
-          echo "exitcode=$?" >> $GITHUB_OUTPUT
-        continue-on-error: true
+          EXIT_CODE=$?
+          echo "exitcode=$EXIT_CODE" >> $GITHUB_OUTPUT
+          
+          # Exit code meanings for -detailed-exitcode:
+          # 0 = no changes needed
+          # 1 = error occurred
+          # 2 = changes pending (this is success!)
+          if [ $EXIT_CODE -eq 1 ]; then
+            echo "❌ OpenTofu plan failed with errors"
+            exit 1
+          elif [ $EXIT_CODE -eq 2 ]; then
+            echo "✅ OpenTofu plan completed successfully - changes pending"
+            exit 0
+          elif [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ OpenTofu plan completed successfully - no changes needed"
+            exit 0
+          else
+            echo "⚠️ OpenTofu plan completed with unexpected exit code: $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
 
       # Step 7: Show plan output
       - name: Show plan output

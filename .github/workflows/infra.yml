@@ -28,15 +28,6 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Step 2.1: Create state storage container
-      - name: Create state storage container
-        run: |
-          # Create blob container for OpenTofu state if it doesn't exist
-          az storage container create \
-            --name tfstate \
-            --account-name s224252426 \
-            --auth-mode login
-
       # Step 3: Install OpenTofu
       - name: Install OpenTofu
         run: |
@@ -61,12 +52,6 @@ jobs:
       # Step 4: Initialize OpenTofu
       - name: Initialize OpenTofu
         run: tofu init
-
-      # Step 4.1: Verify state backend
-      - name: Verify state backend
-        run: |
-          echo "Current OpenTofu state:"
-          tofu show -json | jq -r '.values.root_module.resources[] | select(.type != null) | "\(.type).\(.name): \(.values.name // .values.id // "N/A")"' || echo "No state found or empty state"
 
       # Step 5: Validate OpenTofu configuration
       - name: Validate OpenTofu configuration

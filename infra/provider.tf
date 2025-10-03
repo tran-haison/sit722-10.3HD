@@ -10,13 +10,6 @@ terraform {
     }
   }
   required_version = ">= 1.1.0"
-  
-  backend "azurerm" {
-    resource_group_name  = "s224252426"
-    storage_account_name = "s224252426"
-    container_name       = "tfstate"
-    key                  = "infrastructure.tfstate"
-  }
 }
 
 provider "azurerm" {

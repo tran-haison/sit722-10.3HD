@@ -1,0 +1,155 @@
+name: Staging - Deploy to Staging Environment
+
+on:
+  workflow_run:
+    workflows: ["CI - Test, Build and Push Images to ACR"]
+    types:
+      - completed
+
+jobs:
+  deploy_backend_staging:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    
+    outputs:
+      PRODUCT_API_IP: ${{ steps.get_product_ip.outputs.external_ip }}
+      ORDER_API_IP: ${{ steps.get_order_ip.outputs.external_ip }}
+      CUSTOMER_API_IP: ${{ steps.get_customer_ip.outputs.external_ip }}
+
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Azure login using a Service Principal secret
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Step 3: Set AKS Context
+      - name: Set AKS Context
+        run: |
+          az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
+
+      # Step 4: Attach ACR
+      - name: Attach ACR
+        run: |
+          az aks update --name ${{ secrets.AKS_CLUSTER_NAME }} --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --attach-acr ${{ secrets.ACR_NAME }}
+
+      # Step 5: Deploy Backend to Staging Environment
+      - name: Deploy Backend to Staging Environment
+        run: |
+          kubectl apply -f k8s/configmaps.yaml -n staging
+          kubectl apply -f k8s/secrets.yaml -n staging
+          kubectl apply -f k8s/rabbitmq.yaml -n staging
+          kubectl apply -f k8s/product-db.yaml -n staging
+          kubectl apply -f k8s/order-db.yaml -n staging
+          kubectl apply -f k8s/customer-db.yaml -n staging
+          kubectl apply -f k8s/product-service.yaml -n staging
+          kubectl apply -f k8s/order-service.yaml -n staging
+          kubectl apply -f k8s/customer-service.yaml -n staging
+
+      # Step 6: Wait for Backend LoadBalancer IPs
+      - name: Wait for Backend LoadBalancer IPs
+        run: |
+          echo "Waiting for Backend LoadBalancer IPs to be assigned (up to 5 minutes)..."
+          PRODUCT_IP=""
+          ORDER_IP=""
+          CUSTOMER_IP=""
+          
+          for i in $(seq 1 60); do
+            echo "Attempt $i/60 to get IPs..."
+            PRODUCT_IP=$(kubectl get service product-service-w10-aks -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            ORDER_IP=$(kubectl get service order-service-w10-aks -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            CUSTOMER_IP=$(kubectl get service customer-service-w10-aks -n staging -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+            if [[ -n "$PRODUCT_IP" && -n "$ORDER_IP" && -n "$CUSTOMER_IP" ]]; then
+              echo "All backend LoadBalancer IPs assigned!"
+              echo "Product Service IP: $PRODUCT_IP"
+              echo "Order Service IP: $ORDER_IP"
+              echo "Customer Service IP: $CUSTOMER_IP"
+              break
+            fi
+            sleep 5 # Wait 5 seconds before next attempt
+          done
+          
+          if [[ -z "$PRODUCT_IP" || -z "$ORDER_IP" || -z "$CUSTOMER_IP" ]]; then
+            echo "Error: One or more LoadBalancer IPs not assigned after timeout."
+            exit 1 # Fail the job if IPs are not obtained
+          fi
+          
+          # Set environment variables for subsequent steps
+          echo "PRODUCT_IP=$PRODUCT_IP" >> $GITHUB_ENV
+          echo "ORDER_IP=$ORDER_IP" >> $GITHUB_ENV
+          echo "CUSTOMER_IP=$CUSTOMER_IP" >> $GITHUB_ENV
+
+      # Step 7: Capture Product Service IP
+      - name: Capture Product Service IP for Workflow Output
+        id: get_product_ip
+        run: echo "external_ip=${{ env.PRODUCT_IP }}" >> $GITHUB_OUTPUT
+      
+      # Step 8: Capture Order Service IP
+      - name: Capture Order Service IP for Workflow Output
+        id: get_order_ip
+        run: echo "external_ip=${{ env.ORDER_IP }}" >> $GITHUB_OUTPUT
+
+      # Step 9: Capture Customer Service IP
+      - name: Capture Customer Service IP for Workflow Output
+        id: get_customer_ip
+        run: echo "external_ip=${{ env.CUSTOMER_IP }}" >> $GITHUB_OUTPUT
+
+      # Step 10: Logout from Azure for security (runs even if deployment fails)
+      - name: Logout from Azure
+        run: az logout
+        if: always()
+
+  deploy_frontend_staging:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    needs: deploy_backend_staging
+
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Azure login using a Service Principal secret
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Step 3: Set AKS Context
+      - name: Set AKS Context
+        run: |
+          az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
+
+      # Step 4: Attach ACR
+      - name: Attach ACR
+        run: |
+          az aks update --name ${{ secrets.AKS_CLUSTER_NAME }} --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --attach-acr ${{ secrets.ACR_NAME }}
+
+      # Step 5: Inject Backend IPs into Frontend main.js
+      - name: Inject Backend IPs into Frontend main.js
+        run: |
+          echo "Injecting IPs into frontend/main.js"
+          # Inject backend IPs from the backend deployment job
+          sed -i "s|_PRODUCT_API_URL_|${{ needs.deploy_backend_staging.outputs.PRODUCT_API_IP }}|g" frontend/main.js
+          sed -i "s|_ORDER_API_URL_|${{ needs.deploy_backend_staging.outputs.ORDER_API_IP }}|g" frontend/main.js
+          sed -i "s|_CUSTOMER_API_URL_|${{ needs.deploy_backend_staging.outputs.CUSTOMER_API_IP }}|g" frontend/main.js
+          
+          # Display the modified file content for debugging
+          echo "--- Modified main.js content ---"
+          cat frontend/main.js
+          echo "---------------------------------"
+
+      # Step 6: Deploy Frontend to Staging Environment
+      - name: Deploy Frontend to Staging Environment
+        run: |
+          kubectl apply -f k8s/frontend.yaml -n staging
+
+      # Step 7: Logout from Azure for security (runs even if deployment fails)
+      - name: Logout from Azure
+        run: az logout
+        if: always()

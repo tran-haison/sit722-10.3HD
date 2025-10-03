@@ -1,0 +1,175 @@
+name: Infrastructure - Deploy Azure Resources with OpenTofu
+
+on:
+  push:
+    branches:
+      - infra
+    paths:
+      - 'infra/**'
+      - '.github/workflows/infra.yml'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'OpenTofu action to perform'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+jobs:
+  deploy_infrastructure:
+    runs-on: ubuntu-latest
+    environment: Infrastructure
+    defaults:
+      run:
+        working-directory: infra/
+    
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Azure login using a Service Principal secret
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Step 3: Install OpenTofu
+      - name: Install OpenTofu
+        run: |
+          # Download the installer script
+          curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
+          
+          # Grant execution permissions
+          chmod +x install-opentofu.sh
+          
+          # Run the installer with standalone method
+          ./install-opentofu.sh --install-method standalone
+          
+          # Add OpenTofu to PATH
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          
+          # Remove the installer
+          rm -f install-opentofu.sh
+          
+          # Verify installation
+          tofu version
+
+      # Step 4: Initialize OpenTofu
+      - name: Initialize OpenTofu
+        run: tofu init
+
+      # Step 5: Validate OpenTofu configuration
+      - name: Validate OpenTofu configuration
+        run: tofu validate
+
+      # Step 6: Plan OpenTofu changes
+      - name: Plan OpenTofu changes
+        id: plan
+        run: |
+          set +e  # Don't exit on non-zero return codes
+          tofu plan -detailed-exitcode -out=tfplan
+          EXIT_CODE=$?
+          set -e  # Re-enable exit on error
+          
+          echo "exitcode=$EXIT_CODE" >> $GITHUB_OUTPUT
+          
+          # Exit code meanings for -detailed-exitcode:
+          # 0 = no changes needed
+          # 1 = error occurred
+          # 2 = changes pending (this is success!)
+          if [ $EXIT_CODE -eq 1 ]; then
+            echo "❌ OpenTofu plan failed with errors"
+            exit 1
+          elif [ $EXIT_CODE -eq 2 ]; then
+            echo "✅ OpenTofu plan completed successfully - changes pending"
+            # Don't exit, let the step complete successfully
+          elif [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ OpenTofu plan completed successfully - no changes needed"
+            # Don't exit, let the step complete successfully
+          else
+            echo "⚠️ OpenTofu plan completed with unexpected exit code: $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
+
+      # Step 7: Show plan output
+      - name: Show plan output
+        if: always() && steps.plan.outputs.exitcode == 2
+        run: tofu show tfplan
+
+      # Step 8: Apply OpenTofu changes (only if there are changes or manual apply)
+      - name: Apply OpenTofu changes
+        if: |
+          (github.event_name == 'push' && steps.plan.outputs.exitcode == 2) ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+        run: tofu apply -auto-approve tfplan
+        env:
+          TF_LOG: INFO
+
+      # Step 9: Destroy resources (only for manual destroy)
+      - name: Destroy OpenTofu resources
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+        run: tofu destroy -auto-approve
+        env:
+          TF_LOG: INFO
+
+      # Step 10: Show current state
+      - name: Show current state
+        if: always() && (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'plan')
+        run: tofu show
+
+      # Step 11: Get AKS credentials for verification
+      - name: Get AKS credentials
+        if: |
+          (github.event_name == 'push' && steps.plan.outputs.exitcode == 2) ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+        run: |
+          # Get resource group and cluster name from OpenTofu output
+          RESOURCE_GROUP=$(tofu output -raw resource_group_name 2>/dev/null || echo "${{ secrets.AKS_RESOURCE_GROUP }}")
+          CLUSTER_NAME=$(tofu output -raw cluster_name 2>/dev/null || echo "${{ secrets.AKS_CLUSTER_NAME }}")
+          
+          echo "Resource Group: $RESOURCE_GROUP"
+          echo "Cluster Name: $CLUSTER_NAME"
+          
+          # Get AKS credentials
+          az aks get-credentials --resource-group $RESOURCE_GROUP --name $CLUSTER_NAME --overwrite-existing
+          
+          # Verify cluster is accessible
+          kubectl get nodes
+          kubectl get namespaces
+
+      # Step 12: Verify namespaces exist
+      - name: Verify namespaces
+        if: |
+          (github.event_name == 'push' && steps.plan.outputs.exitcode == 2) ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+        run: |
+          # Check if staging namespace exists
+          if kubectl get namespace staging >/dev/null 2>&1; then
+            echo "✅ Staging namespace exists"
+            kubectl describe namespace staging
+          else
+            echo "⚠️  Staging namespace not found"
+          fi
+          
+          # Check if production namespace exists
+          if kubectl get namespace production >/dev/null 2>&1; then
+            echo "✅ Production namespace exists"
+            kubectl describe namespace production
+          else
+            echo "⚠️  Production namespace not found"
+          fi
+
+      # Step 13: Cleanup plan file
+      - name: Cleanup plan file
+        if: always()
+        run: rm -f tfplan
+
+      # Step 14: Logout from Azure for security
+      - name: Logout from Azure
+        run: az logout
+        if: always()

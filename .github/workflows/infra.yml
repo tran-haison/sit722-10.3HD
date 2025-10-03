@@ -8,16 +8,6 @@ on:
       - 'infra/**'
       - '.github/workflows/infra.yml'
   workflow_dispatch:
-    inputs:
-      action:
-        description: 'OpenTofu action to perform'
-        required: true
-        default: 'apply'
-        type: choice
-        options:
-          - plan
-          - apply
-          - destroy
 
 jobs:
   deploy_infrastructure:
@@ -37,6 +27,16 @@ jobs:
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Step 2.1: Create state storage container
+      - name: Create state storage container
+        run: |
+          # Create blob container for OpenTofu state if it doesn't exist
+          az storage container create \
+            --name tfstate \
+            --account-name s224252426 \
+            --auth-mode login \
+            --fail-on-exist false
 
       # Step 3: Install OpenTofu
       - name: Install OpenTofu
@@ -62,6 +62,12 @@ jobs:
       # Step 4: Initialize OpenTofu
       - name: Initialize OpenTofu
         run: tofu init
+
+      # Step 4.1: Verify state backend
+      - name: Verify state backend
+        run: |
+          echo "Current OpenTofu state:"
+          tofu show -json | jq -r '.values.root_module.resources[] | select(.type != null) | "\(.type).\(.name): \(.values.name // .values.id // "N/A")"' || echo "No state found or empty state"
 
       # Step 5: Validate OpenTofu configuration
       - name: Validate OpenTofu configuration
@@ -101,32 +107,20 @@ jobs:
         if: always() && steps.plan.outputs.exitcode == 2
         run: tofu show tfplan
 
-      # Step 8: Apply OpenTofu changes (only if there are changes or manual apply)
+      # Step 8: Apply OpenTofu changes (only if there are changes or manual dispatch)
       - name: Apply OpenTofu changes
         if: |
           (github.event_name == 'push' && steps.plan.outputs.exitcode == 2) ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+          (github.event_name == 'workflow_dispatch')
         run: tofu apply -auto-approve tfplan
         env:
           TF_LOG: INFO
 
-      # Step 9: Destroy resources (only for manual destroy)
-      - name: Destroy OpenTofu resources
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
-        run: tofu destroy -auto-approve
-        env:
-          TF_LOG: INFO
-
-      # Step 10: Show current state
-      - name: Show current state
-        if: always() && (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'plan')
-        run: tofu show
-
-      # Step 11: Get AKS credentials for verification
+      # Step 9: Get AKS credentials for verification
       - name: Get AKS credentials
         if: |
           (github.event_name == 'push' && steps.plan.outputs.exitcode == 2) ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+          (github.event_name == 'workflow_dispatch')
         run: |
           # Get resource group and cluster name from OpenTofu output
           RESOURCE_GROUP=$(tofu output -raw resource_group_name 2>/dev/null || echo "${{ secrets.AKS_RESOURCE_GROUP }}")
@@ -142,11 +136,11 @@ jobs:
           kubectl get nodes
           kubectl get namespaces
 
-      # Step 12: Verify namespaces exist
+      # Step 10: Verify namespaces exist
       - name: Verify namespaces
         if: |
           (github.event_name == 'push' && steps.plan.outputs.exitcode == 2) ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+          (github.event_name == 'workflow_dispatch')
         run: |
           # Check if staging namespace exists
           if kubectl get namespace staging >/dev/null 2>&1; then
@@ -164,12 +158,12 @@ jobs:
             echo "⚠️  Production namespace not found"
           fi
 
-      # Step 13: Cleanup plan file
+      # Step 11: Cleanup plan file
       - name: Cleanup plan file
         if: always()
         run: rm -f tfplan
 
-      # Step 14: Logout from Azure for security
+      # Step 12: Logout from Azure for security
       - name: Logout from Azure
         run: az logout
         if: always()

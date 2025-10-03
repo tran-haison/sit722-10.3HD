@@ -1,18 +1,9 @@
-# .github/workflows/backend_cd.yml
-name: CD - Deploy Backend Services to AKS
+name: CD - Deploy to Production Environment
 
 on:
-  workflow_call:
-    outputs:
-      PRODUCT_API_IP:
-        description: Product service external IP
-        value: ${{ jobs.deploy_backend.outputs.PRODUCT_API_IP }}
-      ORDER_API_IP:
-        description: Order service external IP
-        value: ${{ jobs.deploy_backend.outputs.ORDER_API_IP }}
-      CUSTOMER_API_IP:
-        description: Customer service external IP
-        value: ${{ jobs.deploy_backend.outputs.CUSTOMER_API_IP }}
+  push:
+    branches:
+      - main
 
 jobs:
   deploy_backend:
@@ -110,6 +101,56 @@ jobs:
         run: echo "external_ip=${{ env.CUSTOMER_IP }}" >> $GITHUB_OUTPUT
 
       # Step 10: Logout from Azure for security (runs even if deployment fails)
+      - name: Logout from Azure
+        run: az logout
+        if: always()
+
+  deploy_frontend:
+    runs-on: ubuntu-latest
+    environment: Production
+    needs: deploy_backend
+
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Login to Azure
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Step 3: Set Kubernetes context (get AKS credentials)
+      - name: Set Kubernetes context (get AKS credentials)
+        run: |
+          az aks get-credentials --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --name ${{ secrets.AKS_CLUSTER_NAME }} --overwrite-existing
+
+      # Step 4: Attach ACR
+      - name: Attach ACR
+        run: |
+          az aks update --name ${{ secrets.AKS_CLUSTER_NAME }} --resource-group ${{ secrets.AKS_RESOURCE_GROUP }} --attach-acr ${{ secrets.ACR_NAME }}
+
+      # Step 5: Inject Backend IPs into Frontend main.js
+      - name: Inject Backend IPs into Frontend main.js
+        run: |
+          echo "Injecting IPs into frontend/main.js"
+          # Inject backend IPs from the backend deployment job
+          sed -i "s|_PRODUCT_API_URL_|${{ needs.deploy_backend.outputs.PRODUCT_API_IP }}|g" frontend/main.js
+          sed -i "s|_ORDER_API_URL_|${{ needs.deploy_backend.outputs.ORDER_API_IP }}|g" frontend/main.js
+          sed -i "s|_CUSTOMER_API_URL_|${{ needs.deploy_backend.outputs.CUSTOMER_API_IP }}|g" frontend/main.js
+          
+          # Display the modified file content for debugging
+          echo "--- Modified main.js content ---"
+          cat frontend/main.js
+          echo "---------------------------------"
+
+      # Step 6: Deploy Frontend to Production Environment
+      - name: Deploy Frontend to Production Environment
+        run: |
+          kubectl apply -f k8s/frontend.yaml -n production
+
+      # Step 7: Logout from Azure for security (runs even if deployment fails)
       - name: Logout from Azure
         run: az logout
         if: always()

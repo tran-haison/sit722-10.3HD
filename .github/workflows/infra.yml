@@ -35,8 +35,7 @@ jobs:
           az storage container create \
             --name tfstate \
             --account-name s224252426 \
-            --auth-mode login \
-            --fail-on-exist false
+            --auth-mode login
 
       # Step 3: Install OpenTofu
       - name: Install OpenTofu

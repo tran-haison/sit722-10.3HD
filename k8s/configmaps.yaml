@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecomm-config-w10-aks
+data:
+  PRODUCTS_DB_NAME: products
+  ORDERS_DB_NAME: orders
+  CUSTOMERS_DB_NAME: customers
+
+  AZURE_STORAGE_CONTAINER_NAME: "s224252426"
+  AZURE_SAS_TOKEN_EXPIRY_HOURS: "24"
+
+  RABBITMQ_HOST: rabbitmq-service-w10-aks
+
+  # Internal Service URLs (Kubernetes Service Names for inter-service communication)
+  # These are how your microservices will talk to each other within the cluster.
+  PRODUCT_SERVICE_URL: http://product-service-w10-aks:8000
+  ORDER_SERVICE_URL: http://order-service-w10-aks:8001
+  CUSTOMER_SERVICE_URL: http://customer-service-w10-aks:8002

@@ -145,13 +145,7 @@ jobs:
           docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest ./backend/order_service/
           docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest ./backend/customer_service/
 
-      # Step 5: Install Trivy
-      - name: Install Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          trivy_version: 'latest'
-
-      # Step 6: Run Trivy vulnerability scanner on Backend images
+      # Step 5: Run Trivy vulnerability scanner on Backend images
       - name: Run Trivy vulnerability scanner on Backend images
         uses: aquasecurity/trivy-action@master
         with:
@@ -163,7 +157,7 @@ jobs:
           output: 'trivy-backend-results.sarif'
           severity: 'CRITICAL,HIGH'
 
-      # Step 7: Upload Trivy scan results to GitHub Security tab
+      # Step 6: Upload Trivy scan results to GitHub Security tab
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
@@ -171,7 +165,7 @@ jobs:
           sarif_file: 'trivy-backend-results.sarif'
           category: 'trivy-backend'
 
-      # Step 8: Run Docker Scout on Backend images
+      # Step 7: Run Docker Scout on Backend images
       - name: Run Docker Scout on Backend images
         run: |
           echo "Running Docker Scout on Backend images..."
@@ -184,14 +178,14 @@ jobs:
           docker scout recommendations ${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest
           docker scout recommendations ${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest
 
-      # Step 9: Push Docker images for Backend services
+      # Step 8: Push Docker images for Backend services
       - name: Push Backend service images to ACR
         run: |
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/product_service:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest
 
-      # Step 10: Logout from Azure for security (runs even if image push fails)
+      # Step 9: Logout from Azure for security (runs even if image push fails)
       - name: Logout from Azure
         run: az logout
         if: always()
@@ -220,13 +214,7 @@ jobs:
         run: |
           docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest ./frontend/
 
-      # Step 5: Install Trivy
-      - name: Install Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          trivy_version: 'latest'
-
-      # Step 6: Run Trivy vulnerability scanner on Frontend image
+      # Step 5: Run Trivy vulnerability scanner on Frontend image
       - name: Run Trivy vulnerability scanner on Frontend image
         uses: aquasecurity/trivy-action@master
         with:
@@ -235,7 +223,7 @@ jobs:
           output: 'trivy-frontend-results.sarif'
           severity: 'CRITICAL,HIGH'
 
-      # Step 7: Upload Trivy scan results to GitHub Security tab
+      # Step 6: Upload Trivy scan results to GitHub Security tab
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
@@ -243,7 +231,7 @@ jobs:
           sarif_file: 'trivy-frontend-results.sarif'
           category: 'trivy-frontend'
 
-      # Step 8: Run Docker Scout on Frontend image
+      # Step 7: Run Docker Scout on Frontend image
       - name: Run Docker Scout on Frontend image
         run: |
           echo "Running Docker Scout on Frontend image..."
@@ -252,12 +240,12 @@ jobs:
           echo "Running Docker Scout recommendations..."
           docker scout recommendations ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest
 
-      # Step 9: Push Frontend Image to ACR
+      # Step 8: Push Frontend Image to ACR
       - name: Push Frontend Image to ACR
         run: |
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest
 
-      # Step 10: Logout from Azure for security (runs even if image push fails)
+      # Step 9: Logout from Azure for security (runs even if image push fails)
       - name: Logout from Azure
         run: az logout
         if: always()

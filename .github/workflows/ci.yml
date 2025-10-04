@@ -152,7 +152,7 @@ jobs:
           image-ref: '${{ secrets.ACR_LOGIN_SERVER }}/product_service:latest'
           format: 'sarif'
           output: 'trivy-product-service-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          severity: 'CRITICAL,HIGH'
 
       # Step 6: Run Trivy vulnerability scanner on Order Service
       - name: Run Trivy vulnerability scanner on Order Service
@@ -161,7 +161,7 @@ jobs:
           image-ref: '${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest'
           format: 'sarif'
           output: 'trivy-order-service-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          severity: 'CRITICAL,HIGH'
 
       # Step 7: Run Trivy vulnerability scanner on Customer Service
       - name: Run Trivy vulnerability scanner on Customer Service
@@ -170,7 +170,7 @@ jobs:
           image-ref: '${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest'
           format: 'sarif'
           output: 'trivy-customer-service-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          severity: 'CRITICAL,HIGH'
 
       # Step 8: Upload Product Service Trivy scan results to GitHub Security tab
       - name: Upload Product Service Trivy scan results to GitHub Security tab
@@ -239,7 +239,7 @@ jobs:
           image-ref: '${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest'
           format: 'sarif'
           output: 'trivy-frontend-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          severity: 'CRITICAL,HIGH'
 
       # Step 6: Upload Trivy scan results to GitHub Security tab
       - name: Upload Trivy scan results to GitHub Security tab

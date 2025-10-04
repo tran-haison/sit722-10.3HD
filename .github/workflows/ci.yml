@@ -172,25 +172,38 @@ jobs:
           output: 'trivy-customer-service-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
-      # Step 8: Upload Trivy scan results to GitHub Security tab
-      - name: Upload Trivy scan results to GitHub Security tab
+      # Step 8: Upload Product Service Trivy scan results to GitHub Security tab
+      - name: Upload Product Service Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: |
-            trivy-product-service-results.sarif
-            trivy-order-service-results.sarif
-            trivy-customer-service-results.sarif
-          category: 'trivy-backend'
+          sarif_file: 'trivy-product-service-results.sarif'
+          category: 'trivy-product-service'
 
-      # Step 9: Push Docker images for Backend services
+      # Step 9: Upload Order Service Trivy scan results to GitHub Security tab
+      - name: Upload Order Service Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-order-service-results.sarif'
+          category: 'trivy-order-service'
+
+      # Step 10: Upload Customer Service Trivy scan results to GitHub Security tab
+      - name: Upload Customer Service Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-customer-service-results.sarif'
+          category: 'trivy-customer-service'
+
+      # Step 11: Push Docker images for Backend services
       - name: Push Backend service images to ACR
         run: |
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/product_service:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest
 
-      # Step 10: Logout from Azure for security (runs even if image push fails)
+      # Step 12: Logout from Azure for security (runs even if image push fails)
       - name: Logout from Azure
         run: az logout
         if: always()

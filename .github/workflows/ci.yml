@@ -145,34 +145,52 @@ jobs:
           docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest ./backend/order_service/
           docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest ./backend/customer_service/
 
-      # Step 5: Run Trivy vulnerability scanner on Backend images
-      - name: Run Trivy vulnerability scanner on Backend images
+      # Step 5: Run Trivy vulnerability scanner on Product Service
+      - name: Run Trivy vulnerability scanner on Product Service
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: |
-            ${{ secrets.ACR_LOGIN_SERVER }}/product_service:latest
-            ${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest
-            ${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest
+          image-ref: '${{ secrets.ACR_LOGIN_SERVER }}/product_service:latest'
           format: 'sarif'
-          output: 'trivy-backend-results.sarif'
+          output: 'trivy-product-service-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
-      # Step 6: Upload Trivy scan results to GitHub Security tab
+      # Step 6: Run Trivy vulnerability scanner on Order Service
+      - name: Run Trivy vulnerability scanner on Order Service
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest'
+          format: 'sarif'
+          output: 'trivy-order-service-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      # Step 7: Run Trivy vulnerability scanner on Customer Service
+      - name: Run Trivy vulnerability scanner on Customer Service
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest'
+          format: 'sarif'
+          output: 'trivy-customer-service-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      # Step 8: Upload Trivy scan results to GitHub Security tab
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-backend-results.sarif'
+          sarif_file: |
+            trivy-product-service-results.sarif
+            trivy-order-service-results.sarif
+            trivy-customer-service-results.sarif
           category: 'trivy-backend'
 
-      # Step 7: Push Docker images for Backend services
+      # Step 9: Push Docker images for Backend services
       - name: Push Backend service images to ACR
         run: |
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/product_service:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest
           docker push ${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest
 
-      # Step 8: Logout from Azure for security (runs even if image push fails)
+      # Step 10: Logout from Azure for security (runs even if image push fails)
       - name: Logout from Azure
         run: az logout
         if: always()

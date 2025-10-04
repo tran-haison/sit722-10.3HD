@@ -190,8 +190,8 @@ jobs:
           fi
           
           # Create detailed status message
-          echo "Backend deployment: ${{ needs.deploy_backend.result }}" >> $GITHUB_OUTPUT
-          echo "Frontend deployment: ${{ needs.deploy_frontend.result }}" >> $GITHUB_OUTPUT
+          echo "backend_status=${{ needs.deploy_backend.result }}" >> $GITHUB_OUTPUT
+          echo "frontend_status=${{ needs.deploy_frontend.result }}" >> $GITHUB_OUTPUT
 
       # Step 3: Send success notification email
       - name: Send success notification email
@@ -215,8 +215,8 @@ jobs:
             Workflow: ${{ github.workflow }}
             Run ID: ${{ github.run_id }}
             
-            ✅ Backend deployment: ${{ needs.deploy_backend.result }}
-            ✅ Frontend deployment: ${{ needs.deploy_frontend.result }}
+            ✅ Backend deployment: ${{ steps.status.outputs.backend_status }}
+            ✅ Frontend deployment: ${{ steps.status.outputs.frontend_status }}
             
             Backend Service IPs:
             • Product Service: ${{ needs.deploy_backend.outputs.PRODUCT_API_IP }}
@@ -250,8 +250,8 @@ jobs:
             Workflow: ${{ github.workflow }}
             Run ID: ${{ github.run_id }}
             
-            ❌ Backend deployment: ${{ needs.deploy_backend.result }}
-            ❌ Frontend deployment: ${{ needs.deploy_frontend.result }}
+            ❌ Backend deployment: ${{ steps.status.outputs.backend_status }}
+            ❌ Frontend deployment: ${{ steps.status.outputs.frontend_status }}
             
             Please check the workflow logs for detailed error information.
             

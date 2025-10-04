@@ -155,7 +155,7 @@ jobs:
             ${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest
           format: 'sarif'
           output: 'trivy-backend-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
       # Step 6: Upload Trivy scan results to GitHub Security tab
       - name: Upload Trivy scan results to GitHub Security tab
@@ -169,9 +169,9 @@ jobs:
       - name: Run Docker Scout on Backend images
         run: |
           echo "Running Docker Scout on Backend images..."
-          docker scout cves ${{ secrets.ACR_LOGIN_SERVER }}/product_service:latest --format table
-          docker scout cves ${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest --format table
-          docker scout cves ${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest --format table
+          docker scout cves ${{ secrets.ACR_LOGIN_SERVER }}/product_service:latest
+          docker scout cves ${{ secrets.ACR_LOGIN_SERVER }}/order_service:latest
+          docker scout cves ${{ secrets.ACR_LOGIN_SERVER }}/customer_service:latest
           
           echo "Running Docker Scout recommendations..."
           docker scout recommendations ${{ secrets.ACR_LOGIN_SERVER }}/product_service:latest
@@ -221,7 +221,7 @@ jobs:
           image-ref: '${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest'
           format: 'sarif'
           output: 'trivy-frontend-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
       # Step 6: Upload Trivy scan results to GitHub Security tab
       - name: Upload Trivy scan results to GitHub Security tab
@@ -235,7 +235,7 @@ jobs:
       - name: Run Docker Scout on Frontend image
         run: |
           echo "Running Docker Scout on Frontend image..."
-          docker scout cves ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest --format table
+          docker scout cves ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest
           
           echo "Running Docker Scout recommendations..."
           docker scout recommendations ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest
